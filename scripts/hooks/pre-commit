@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+is_sensitive_path() {
+    local path=$1 basename component
+    basename=${path##*/}
+
+    [[ $basename == .env ]] && return 0
+    [[ $basename == .env.* && $basename != .env.example ]] && return 0
+    [[ $basename == *.key || $basename == *.pem ]] && return 0
+
+    while [[ $path == */* ]]; do
+        component=${path%%/*}
+        [[ $component == .secrets ]] && return 0
+        path=${path#*/}
+    done
+    [[ $path == .secrets ]]
+}
+
+git diff --cached --name-only -z | while IFS= read -r -d '' path; do
+    if is_sensitive_path "$path"; then
+        printf 'Error: refusing to commit sensitive path: %q\n' "$path" >&2
+        exit 1
+    fi
+done
